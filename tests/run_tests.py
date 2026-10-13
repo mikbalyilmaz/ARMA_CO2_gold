@@ -96,11 +96,20 @@ from armaco2.legacy import run_v1  # noqa: E402
 ns, printed = run_v1()
 v1_printed = {(0, 0, 0): 3954.01, (0, 0, 1): 3312.73, (0, 0, 2): 2771.31, (0, 0, 3): 2328.74, (0, 1, 0): 1523.91,
               (0, 1, 1): 1254.79, (0, 1, 2): 1137.97, (0, 1, 3): 1094.51, (2, 1, 1): 979.80, (2, 1, 2): 979.50}
-ok = all(f"Best ARIMA{k} AIC={v:.2f}" in printed for k, v in v1_printed.items())
+# The AIC path printed by version 1, in order. Fits that hardly converge (an MA(3) for the trending level, the
+# AIC choice ARIMA(2,1,3)) give AICs that move by up to 0.1% with the optimiser of the installed numpy/scipy, so
+# the path is compared order by order with a relative tolerance of 0.5%.
+import re  # noqa: E402
+
+path = [(tuple(int(v) for v in m.group(1).split(",")), float(m.group(2)))
+        for m in re.finditer(r"Best ARIMA\(([\d, ]+)\) AIC=([\d.]+)", printed)]
+ok = [k for k, _ in path[:len(v1_printed)]] == list(v1_printed)
+ok &= all(abs(a - v1_printed[k]) / v1_printed[k] < 0.005 for k, a in path[:len(v1_printed)])
+ok &= len(path) == len(v1_printed) + 1 and path[-1][0] == (2, 1, 3) and abs(path[-1][1] - 843.95) / 843.95 < 0.005
 ok &= ns["best_params_aic"] == (2, 1, 3)
 mae111 = float(np.mean(np.abs(ns["y_pred_111"].values - ns["test"].values)))
 ok &= round(mae111, 1) == 2.3                                     # the title of version 1's figure: MAE=2.3
-check("version 1's own code: its printed AIC path, the chosen ARIMA(2,1,3) and MAE 2.3 of ARIMA(1,1,1)", ok)
+check("version 1's own code: its printed AIC path (within 0.5%), the chosen ARIMA(2,1,3), MAE 2.3 of ARIMA(1,1,1)", ok)
 
 # 8. Gold: the stored series equals the EVDS export, month by month, without its incomplete last month
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data"))

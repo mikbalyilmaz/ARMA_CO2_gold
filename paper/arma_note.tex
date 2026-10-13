@@ -1,0 +1,259 @@
+\documentclass[11pt,a4paper]{article}
+
+% Typeface: XeLaTeX with Latin Modern Roman (fontspec default), British English
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage[variant=british]{english}
+
+% Page: the measures of the note template (A4, 11 pt, 4.5 cm side margins, header and page count)
+\usepackage[a4paper,left=4.5cm,right=4.5cm,top=4.5cm,bottom=4.1cm,headheight=14pt,headsep=0.55cm,
+  footskip=0.55cm]{geometry}
+\linespread{0.946}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textbf{PROJECT NOTE} $|$ ARMA\_CO2\_gold}
+\fancyhead[R]{\small\textbf{Compiled on:} \notedate}
+\fancyfoot[C]{\small\thepage\,/\,\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\setlist{noitemsep, topsep=3pt, leftmargin=*}
+\usepackage{xcolor}
+\definecolor{secblue}{HTML}{1F3A5F}
+\definecolor{boxback}{HTML}{EEF2F6}
+\definecolor{mark}{HTML}{9B2226}
+\definecolor{hl}{HTML}{FFF36B}
+% highlighter: each word in a yellow box, line breaks allowed between words
+\makeatletter
+\def\hl#1{{\setlength{\fboxsep}{0.4pt}\hl@word#1 \@nil}}
+\def\hl@word#1 #2\@nil{\colorbox{hl}{\strut #1}%
+  \if\relax\detokenize{#2}\relax\else\colorbox{hl}{\strut\ }\allowbreak\hl@word#2\@nil\fi}
+\makeatother
+\usepackage{titlesec}
+\titleformat{\section}{\color{secblue}\bfseries\normalsize}{\thesection.}{0.4em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\usepackage[most]{tcolorbox}
+\newtcolorbox{notebox}[1]{colback=boxback, colframe=secblue, boxrule=0.5pt, arc=0pt, left=4pt, right=4pt,
+  top=3pt, bottom=3pt, fonttitle=\bfseries\color{secblue}, coltitle=secblue, colbacktitle=boxback,
+  title={#1}, toptitle=1pt, bottomtitle=0pt}
+\usepackage[font=small,labelfont=bf,labelsep=period,skip=4pt]{caption}
+\usepackage[bottom]{footmisc}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\textfloatsep}{10pt}
+\emergencystretch=3em
+\newcommand{\name}[1]{\textcolor{mark}{\textbf{#1}}}
+\newcommand{\widefig}[1]{\includegraphics[width=\textwidth]{#1}}
+
+\newcommand{\notedate}{\number\day\space\ifcase\month\or January\or February\or March\or April\or May\or June\or
+  July\or August\or September\or October\or November\or December\fi\space\number\year}
+
+\input{numbers.tex}
+
+\begin{document}
+
+\vspace*{14pt}
+\begin{tabular}{@{}p{2.35cm}@{}p{\dimexpr\textwidth-2.35cm}@{}}
+\textbf{TITLE:} & \textbf{\large Box--Jenkins in practice: forecasting CO$_2$ at Mauna Loa, and what an ARMA
+model finds in the gold price}\\[3pt]
+\textbf{SUBJECT:} & Aim, method and results of version 2 of the \texttt{ARMA\_CO2\_gold} repository, an application
+of an undergraduate time-series course\\[3pt]
+\textbf{AUTHOR:} & Muhammed İkbal Yılmaz (myucanlar@gmail.com)
+\end{tabular}
+
+\vspace{8pt}
+\textbf{Key finding.} The forecasts of version 1 fail for a reason the course explains: \hl{a series with a trend
+and a twelve-month cycle needs a seasonal model with both differences}. The seasonal ARIMA $(0,1,1)(0,1,1)_{12}$,
+chosen by AIC among \SelCount{} candidates, forecasts the 48 months of 1998--2001 with a mean absolute error of
+\MaeSarima{} ppm, against \MaeArimaA{} and \MaeArimaB{} ppm for the two models of version 1. For gold, monthly returns
+show no autocorrelation an ARMA model could use: \name{the historical mean is the forecast to beat}, and neither an
+ARMA model nor the random walk beats it.
+
+
+\section{Data and design}
+
+\begin{itemize}
+\item \textbf{CO$_2$.} Weekly flask samples at Mauna Loa, \CoFirst{} to \CoLast, in parts per million (ppm), as
+shipped with \texttt{statsmodels}.\footnote{Keeling, C. D., Whorf, T. P. (2004). Atmospheric CO$_2$ concentrations
+derived from flask air samples at sites in the SIO network. In \textit{Trends: A Compendium of Data on Global Change}.
+CDIAC, Oak Ridge National Laboratory.} The monthly value is the mean of the month's samples, as in version 1.
+\CoMissingWord{} months have no sample (\CoMissingList); version 1 filled them with the next month, version 2 starts in
+January 1965 and fills nothing.
+\item \textbf{Split (version 1).} Estimation to December 1997 (\TrainMonths{} months in version 2); one forecast,
+1 to \TestMonths{} months ahead, for January 1998 to December 2001.
+
+\item \textbf{Gold.} Closing price on Borsa Istanbul, US dollars per troy ounce, last close of each month, \GoFirst{}
+to \GoLast{} (\GoMonths{} months), from the CBRT data system EVDS (series TP.ALTINPIYASA.KAP03), the earliest month
+it offers. Version 1's file (from March 2012) is not in its repository.
+\end{itemize}
+
+\section{Identifying the CO$_2$ model}
+
+\textbf{Model.} With the backshift operator $B y_t = y_{t-1}$, a seasonal ARIMA$(p,d,q)(P,D,Q)_{12}$ is
+\begin{equation}
+  \phi_p(B)\,\Phi_P(B^{12})\,(1-B)^d(1-B^{12})^D y_t = \theta_q(B)\,\Theta_Q(B^{12})\,\varepsilon_t ,
+  \label{eq:sarima}
+\end{equation}
+with $\varepsilon_t$ white noise, estimated by exact Gaussian maximum likelihood. Version 1 used $P = D = Q = 0$.
+
+\textbf{The series} (Figure~\ref{fig:co2}). CO$_2$ rose from \CoFirstValue{} to \CoLastValue{} ppm. The change over
+twelve months averaged \GrowthEarly{} ppm in 1965--74 and \GrowthLate{} ppm in 1988--97, and reached
+\GrowthNinetyEight{} ppm in 1998, the first test year. Around the trend, a cycle of \CycleAmp{} ppm peaks in May
+(+\CycleMay) and bottoms out in October (\CycleOct).
+
+\begin{figure}[!htb]
+\widefig{../figures/fig1_co2.pdf}
+\caption{CO$_2$ at Mauna Loa. (a) Monthly level; the red line marks the first test month. (b) Change over twelve
+months, $y_t - y_{t-12}$. (c) Seasonal effects: deviations from a centred $2\times 12$ moving average.}
+\label{fig:co2}
+\end{figure}
+
+\textbf{Differencing.} The ADF test estimates $\Delta x_t = c + \gamma x_{t-1} + \sum_{i=1}^{k} a_i \Delta x_{t-i}
++ u_t$ and tests $H_0\colon \gamma = 0$ (unit root); KPSS tests the opposite null, stationarity. On January 1965 to
+December 1997 the level has a unit root (ADF $p = \AdfLevelP$; KPSS $p$ \KpssLevelP). After one difference both
+tests point to stationarity (ADF $p$ \AdfDiffP; KPSS $p$ \KpssDiffP), but neither looks for a seasonal unit root;
+the correlogram does (Figure~\ref{fig:acf}). The
+autocorrelations of $\Delta y_t$ return almost undiminished at lags 12, 24 and 36. After both differences,
+$\Delta\Delta_{12} y_t$ keeps two clear autocorrelations, at lags 1 and 12: the signature of a moving average at lag 1
+times a moving average at lag 12.
+
+
+\begin{figure}[!htb]
+\widefig{../figures/fig2_acf.pdf}
+\caption{Sample autocorrelations (top) and partial autocorrelations (bottom), lags 1--36, January 1965 to December
+1997.}\label{fig:acf}
+\end{figure}
+
+\begin{notebox}{BOX: WHY AIC CANNOT CHOOSE $d$}
+\begin{minipage}[t]{0.48\linewidth}\raggedright
+$\mathrm{AIC} = -2\ln \hat L + 2k$, with $\hat L$ the likelihood of the data the model describes. With $d=1$ these
+are the $\Delta y_t$, with $d=2$ the $\Delta^2 y_t$: different data, one observation fewer per difference.
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}\raggedright
+Version 1's search found its smallest AIC at $d=1$ (\AicDZero, \AicDOne, \AicDTwo{} and \AicDThree{} for
+$d = 0,1,2,3$). The comparison is not valid: $d$ and $D$ come from the tests and the correlogram; AIC then picks
+$p,q,P,Q$.
+\end{minipage}
+\end{notebox}
+
+\textbf{Selection.} With $d = D = 1$ fixed, AIC compares \SelCount{} models ($p, q \le 2$; $P, Q \le 1$) on the
+same data. The smallest value, \SelAic, belongs to the \name{airline model} of Box and Jenkins,
+\begin{equation}
+  (1-B)(1-B^{12})\,y_t = (1+\theta B)(1+\Theta B^{12})\,\varepsilon_t ,
+\end{equation}
+with $\hat\theta =$ \ThetaHat{} (s.e.\ \ThetaHatSe), $\hat\Theta =$ \BigThetaHat{} (\BigThetaHatSe) and
+$\hat\sigma^2 = \SigmaSq$. Its residuals pass the Ljung--Box test,
+$Q(m) = n(n+2)\sum_{k=1}^{m} \hat\rho_k^2/(n-k) \sim \chi^2_{m-2}$: $p = \LbPTwelve$, \LbPTwentyFour{} and
+\LbPThirtySix{} for $m = 12, 24, 36$.
+
+\section{Forecasts for 1998--2001}
+
+\textbf{Method.} Each model is estimated once and forecast $h = 1, \dots, 48$ months ahead from December 1997.
+Benchmarks: the seasonal naive forecast with drift, $\hat y_{T+h} = y_{T+h-12j} + j\bar g$ with
+$j = \lceil h/12\rceil$ and $\bar g$ the mean twelve-month change, and additive Holt--Winters. For the ARIMA models
+the 95\% interval is $\hat y_{T+h} \pm 1.96\,\hat\sigma\,(\sum_{i=0}^{h-1}\psi_i^2)^{1/2}$, with $\psi_i$ the weights
+of the model's MA($\infty$) form.
+
+\begin{figure}[!htb]
+\widefig{../figures/fig3_co2_forecasts.pdf}
+\caption{Forecasts made in December 1997, with the data from 1995. Panels 1, 2 and 6 use the data of version 1
+(from 1958, filled months), the others the data of version 2 (from 1965).}\label{fig:fc}
+\end{figure}
+
+\begin{table}[!htb]
+\centering\small
+\caption{Forecast accuracy, January 1998 to December 2001 (48 months), ppm. Coverage: \% of months inside the
+95\% interval.}\label{tab:acc}
+\begin{tabular}{lrrrr}
+\toprule
+Model & MAE & RMSE & Mean error & Coverage \\
+\midrule
+\input{tab_accuracy.tex}
+\end{tabular}
+\end{table}
+
+\textbf{Finding.} Version 1's models cannot follow the data (Figure~\ref{fig:fc}): ARIMA(1,1,1) flattens out within
+a few months and ARIMA(2,1,3) cycles around the level of late 1997 (\ArimaBConv). In \texttt{statsmodels} an ARIMA with $d = 1$
+has no constant, so these forecasts have no drift. The seasonal ARIMA has the smallest errors (Table~\ref{tab:acc}),
+followed by Holt--Winters and the seasonal naive forecast. Every model forecasts too low (negative mean error):
+CO$_2$ grew faster in 1998--2001 than in the training years. The seasonal ARIMA's mean error is \ErrNinetyEight{}
+ppm in 1998 and \ErrNinetyNine{} in 1999, and \InsideSarima{} of 48 months fall inside its 95\% interval.
+
+\textit{Interpretation.} The differences matter more than the choice among the remaining models. The same seasonal
+ARIMA estimated on version 1's data has a smaller error (\MaeSarimaVone) but twice the innovation variance
+($\hat\sigma^2 = \SigmaFilled$ against \SigmaVtwo), an effect of the filled months: estimated from 1958 with the
+empty months skipped by the Kalman filter, $\hat\sigma^2 = \SigmaSkipped$ and the error is \MaeSkipped. One forecast
+origin cannot rank these samples; it does separate seasonal from non-seasonal models.
+
+
+
+\section{Gold: is there an ARMA in the returns?}
+
+\textbf{Why.} Version 1 drew the price with ``7-day'' and ``30-day'' moving averages and a histogram of the
+price in pounds. The data are monthly and in US dollars, and a histogram of a trending price describes no
+distribution. The course question is whether the past of the price helps to forecast it.
+
+\textbf{Method.} The monthly log return $r_t = 100\,(\ln P_t - \ln P_{t-1})$, and for it ARMA$(p,q)$ models
+$r_t = c + \sum_{i=1}^{p}\phi_i r_{t-i} + \varepsilon_t + \sum_{j=1}^{q}\theta_j\varepsilon_{t-j}$ with $p, q \le 2$.
+Forecasts are made one month ahead for the last \GoOosMonths{} months (\GoOosFirst{} to \GoOosLast), each from
+all earlier months, with the ARMA order chosen again by AIC every month. Benchmark: the historical mean
+$\bar r_t$; the out-of-sample $R^2 = 1 - \sum (r_t - \hat r_t)^2 / \sum (r_t - \bar r_t)^2$ is positive when a model
+beats it.
+
+\begin{figure}[!htb]
+\widefig{../figures/fig4_gold.pdf}
+\caption{Gold, \GoFirst{} to \GoLast. (a) Price with version 1's smoothers, now labelled in months. (b)
+Autocorrelations of $r_t$. (c) Histogram of $r_t$ and the normal density with the same mean and variance; red: the
+mean. (d) Cumulative squared error of the historical mean minus that of the model; a rising line means the model
+beats the mean.}\label{fig:gold}
+\end{figure}
+
+\textbf{Finding.} The log price has a unit root (ADF $p = \GoAdfLevelP$), the return does not (ADF $p$
+\GoAdfRetP). The returns average \GoMean\% a month with a standard deviation of \GoSd\%, and their
+autocorrelations stay inside the band (Ljung--Box $Q(12)$, $p = \GoLbP$; Figure~\ref{fig:gold}b). AIC prefers
+ARMA(\GoBestP,\GoBestQ) by a small margin (\GoAicBest{} against \GoAicZero{} for white noise), BIC prefers white
+noise. Out of sample the recursive AIC choice was white noise in all but \GoOosNotMean{} of \GoOosMonths{} months,
+and its $R^2$ is \GoRtwoArma; the random walk (zero forecast) has \GoRtwoZero{} (RMSE \GoRmseArma{} and
+\GoRmseZero{} against \GoRmseMean{} for the mean).
+
+\textit{Interpretation.} Monthly gold returns behave like white noise around a positive mean: the Box--Jenkins
+steps end, correctly, with ARMA(0,0). The moving averages of version 1 describe the trend; they are not forecasts.
+
+\section{Conclusions and limitations}
+
+\begin{enumerate}
+\item The order of differencing comes first: for CO$_2$ it is $d = D = 1$, and with it the simplest seasonal model,
+the airline model, forecasts four years ahead with an error below 1 ppm.
+\item AIC is a tool for choosing among models of the same data; version 1's search over $d$ violated that.
+\item For gold the same steps end with white noise: past monthly returns do not improve on the historical mean.
+
+\end{enumerate}
+
+\textbf{Scope and verification note.} Every number is written from \texttt{figures/*.csv} by
+\texttt{make\_paper.py}; the unit tests check the computations against direct formulas, simulations with a known
+answer and the printed output of version 1. One forecast origin and four test years are a small sample. The gold series starts in July 2018, so version 1's
+2012--2018 sample could not be reproduced.
+
+
+\section*{References}
+{\small
+Box, G. E. P., Jenkins, G. M. (1970). \textit{Time Series Analysis: Forecasting and Control}. Holden-Day.\\
+Dickey, D. A., Fuller, W. A. (1979). Distribution of the estimators for autoregressive time series with a unit root.
+\textit{Journal of the American Statistical Association}, 74(366), 427--431.\\
+Hyndman, R. J., Athanasopoulos, G. (2021). \textit{Forecasting: Principles and Practice} (3rd ed.). OTexts.\\
+Kwiatkowski, D., Phillips, P. C. B., Schmidt, P., Shin, Y. (1992). Testing the null hypothesis of stationarity
+against the alternative of a unit root. \textit{Journal of Econometrics}, 54(1--3), 159--178.\\
+Ljung, G. M., Box, G. E. P. (1978). On a measure of lack of fit in time series models. \textit{Biometrika}, 65(2),
+297--303.
+
+\smallskip
+An AI coding assistant was used in writing the code and in preparing this note.
+}
+
+\end{document}

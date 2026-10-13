@@ -1,0 +1,3 @@
+series,deterministic,n,adf_stat,adf_p,adf_lags,kpss_stat,kpss_p,kpss_lags
+log price,ct,99,-1.638022668178179,0.7771914288634432,0,0.30130782914320775,0.01,5
+monthly log return,c,98,-7.706884088754994,1.2945037890822112e-11,1,0.11584981161270781,0.1,3

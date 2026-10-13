@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "ARMA_CO2_gold: Box-Jenkins analysis of CO2 at Mauna Loa and of the gold price"
+version: 2.0.0
+authors:
+  - family-names: "Yılmaz"
+    given-names: "Muhammed İkbal"
+    email: "myucanlar@gmail.com"
+    affiliation: "Department of Econometrics, Ankara Hacı Bayram Veli University"
+repository-code: "https://github.com/mikbalyilmaz/ARMA_CO2_gold"
+license: MIT
+keywords:
+  - time series
+  - Box-Jenkins
+  - seasonal ARIMA
+  - unit root
+  - forecasting
+  - gold price

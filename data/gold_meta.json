@@ -1,0 +1,13 @@
+{
+  "source": "CBRT EVDS, series TP.ALTINPIYASA.KAP03 (Altın - Kapanış Fiyatı - USD/ons, data source BİST)",
+  "frequency": "monthly",
+  "observation": "Bitiş (last closing price of the month)",
+  "unit": "USD per troy ounce",
+  "downloaded": "2026-10-13",
+  "first": "2018-07",
+  "last": "2026-09",
+  "months": 99,
+  "dropped_incomplete_month": [
+    "2026-10"
+  ]
+}
